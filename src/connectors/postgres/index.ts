@@ -1,3 +1,8 @@
+/**
+ * Postgres access: connection pool + Drizzle handle for future queries/migrations.
+ * `connect()` warms the pool with retries; `healthCheck` is used by GET /health.
+ */
+
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { Pool } from 'pg';

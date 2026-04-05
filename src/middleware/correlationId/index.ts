@@ -1,3 +1,8 @@
+/**
+ * Assigns `request.correlationId` from `X-Correlation-Id` or a new UUID; echoes id on responses.
+ * Sanitises header length and printable ASCII to avoid log/injection issues.
+ */
+
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 

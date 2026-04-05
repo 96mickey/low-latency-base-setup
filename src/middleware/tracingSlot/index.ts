@@ -1,9 +1,13 @@
+/**
+ * Reserved hook point for distributed tracing (e.g. OpenTelemetry). Intentionally empty for now.
+ */
+
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 
 const plugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('onRequest', async () => {
-    /* OpenTelemetry placeholder — zero overhead */
+    /* OTel hook goes here */
   });
 };
 

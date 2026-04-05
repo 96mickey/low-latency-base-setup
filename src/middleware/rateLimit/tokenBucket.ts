@@ -1,3 +1,8 @@
+/**
+ * Per-client-IP token bucket with lazy refill, backed by an LRU to cap memory.
+ * `localDelta` + `drainDeltas()` support hybrid Redis sync without touching Redis on every request.
+ */
+
 import type { Config, RateLimitBucketEntry } from '../../types/index.js';
 import { LruMap } from '../../helpers/lruMap.js';
 

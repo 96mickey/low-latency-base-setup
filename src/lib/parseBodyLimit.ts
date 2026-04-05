@@ -1,5 +1,6 @@
 /**
- * Parse Fastify-style size strings: `100kb`, `1mb`, `512b`.
+ * Parse Fastify-style size strings (`100kb`, `1mb`, …) to a byte count for `bodyLimit`.
+ * Unparseable input falls back to 100 KiB so the server still starts with a safe default.
  */
 export function parseBodyLimitBytes(raw: string): number {
   const s = raw.trim().toLowerCase();

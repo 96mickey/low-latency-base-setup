@@ -1,3 +1,7 @@
+/**
+ * Route `preHandler` factory: Zod-validates body, sets `validatedBody` on success.
+ */
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodSchema } from 'zod';
 

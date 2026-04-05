@@ -1,3 +1,8 @@
+/**
+ * Prometheus metric definitions and Fastify hooks to record HTTP duration and counts per route.
+ * Importing this module registers metrics on `registry` (see also `metricsServer.ts` side-effect).
+ */
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Counter, Gauge, Histogram } from 'prom-client';
 

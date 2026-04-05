@@ -1,3 +1,8 @@
+/**
+ * Minimal Fastify app exposing GET /metrics (Prometheus text) on METRICS_PORT.
+ * Side-effect import registers metrics; optional pool reader updates DB gauges per scrape.
+ */
+
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import '../observability/metrics/definitions.js';
@@ -15,6 +20,7 @@ export async function createMetricsServer(
   app.get('/metrics', async (_req, reply) => {
     if (readPoolGauges) {
       const { active, idle } = readPoolGauges();
+      // Dynamic import keeps test/metrics bundles able to refresh gauge refs after mocks.
       const { dbPoolConnectionsActive, dbPoolConnectionsIdle } = await import(
         '../observability/metrics/definitions.js'
       );

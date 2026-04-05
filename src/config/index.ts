@@ -1,3 +1,9 @@
+/**
+ * Central configuration from environment variables.
+ * Validates with Zod, applies cross-field Redis rules, and maps to the typed `Config`.
+ * Use `loadConfigFromProcessEnv()` at runtime; tests call `loadConfig(partialEnv)`.
+ */
+
 import { z } from 'zod';
 
 import type { Config, RedisMode, RedisTopology } from '../types/index.js';

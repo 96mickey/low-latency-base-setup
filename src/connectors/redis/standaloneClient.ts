@@ -1,3 +1,7 @@
+/**
+ * Single-node Redis (ioredis). Used for `redis-primary` and `hybrid` when topology is standalone.
+ */
+
 import { Redis } from 'ioredis';
 
 import type { Config } from '../../types/index.js';

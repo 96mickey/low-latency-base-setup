@@ -1,3 +1,7 @@
+/**
+ * Redis wiring: `local` = no TCP (stub for dev/tests); otherwise standalone or cluster ioredis.
+ */
+
 import type { Config } from '../../types/index.js';
 
 import { createClusterClient, type ClusterRedis } from './clusterClient.js';
@@ -11,6 +15,7 @@ export type RedisWire = {
   get: (key: string) => Promise<string | null>;
 };
 
+/** In-process stub: no network; hybrid sync still runs but pipelines are no-ops. */
 function localStub(): RedisWire {
   return {
     async connect() {},

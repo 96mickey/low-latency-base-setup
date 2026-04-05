@@ -1,3 +1,7 @@
+/**
+ * Security baseline: Helmet headers + strict CORS allowlist from `CORS_ALLOWED_ORIGINS`.
+ */
+
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import fp from 'fastify-plugin';

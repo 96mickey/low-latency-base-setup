@@ -1,5 +1,6 @@
 /**
- * Shared types — zero runtime logic.
+ * Shared types only — no runtime logic.
+ * `Config` mirrors env after validation; extend here when adding new settings.
  */
 
 export type RedisMode = 'local' | 'hybrid' | 'redis-primary';
@@ -8,6 +9,7 @@ export type RedisTopology = 'standalone' | 'cluster';
 
 export type CircuitBreakerState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
+/** Fully validated application configuration (see `config/index.ts`). */
 export interface Config {
   NODE_ENV: 'development' | 'test' | 'production';
   PORT: number;

@@ -1,3 +1,7 @@
+/**
+ * Single JSON error shape for API clients (code, message, status, correlationId).
+ */
+
 import type { FastifyReply } from 'fastify';
 
 import type { StandardErrorResponse } from '../types/index.js';

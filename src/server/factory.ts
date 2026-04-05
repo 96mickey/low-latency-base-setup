@@ -1,3 +1,8 @@
+/**
+ * Builds the main Fastify server with trust proxy, JSON body size cap, and an injected Pino logger.
+ * Fastify v5 expects a logger *instance* as `loggerInstance`, not raw pino options.
+ */
+
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 
 import { parseBodyLimitBytes } from '../lib/parseBodyLimit.js';

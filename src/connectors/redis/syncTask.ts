@@ -1,3 +1,8 @@
+/**
+ * Background job for `hybrid` mode: periodically pushes local per-IP rate-limit deltas to Redis
+ * (`rl:ip:*` keys) for cross-instance approximate counts. Not on the request hot path.
+ */
+
 import type { Config } from '../../types/index.js';
 import type { RedisConnector } from './index.js';
 

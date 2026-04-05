@@ -1,3 +1,7 @@
+/**
+ * Exponential backoff with jitter for boot-time connections (e.g. first Postgres touch).
+ */
+
 import type { RetryOptions } from '../types/index.js';
 import { sleep } from '../utils/time.js';
 

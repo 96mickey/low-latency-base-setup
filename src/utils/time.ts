@@ -1,3 +1,5 @@
+/** Small time helpers shared by retry/sync code. */
+
 export function nowMs(): number {
   return Date.now();
 }

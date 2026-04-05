@@ -1,3 +1,7 @@
+/**
+ * pg `Pool` factory — tuning comes from `Config` (min/max, SSL, timeouts).
+ */
+
 import { Pool } from 'pg';
 
 import type { Config } from '../../types/index.js';

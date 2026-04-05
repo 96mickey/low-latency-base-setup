@@ -1,3 +1,9 @@
+/**
+ * Rate limiting Fastify plugin — runs early on each request (after correlation id).
+ * Order: global latency circuit breaker → new-IP flood cap → per-IP token bucket.
+ * CIDR bypass and `RATE_LIMIT_DISABLED` short-circuit before any work.
+ */
+
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 

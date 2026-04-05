@@ -1,3 +1,7 @@
+/**
+ * Liveness/readiness-style handler: DB down → 503; Redis degraded still allows 200.
+ */
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import type { HealthResponse } from '../types/index.js';

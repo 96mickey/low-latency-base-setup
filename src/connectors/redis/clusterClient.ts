@@ -1,3 +1,7 @@
+/**
+ * Redis Cluster client — node list comes from `Config.REDIS_CLUSTER_NODES`.
+ */
+
 import { Cluster } from 'ioredis';
 
 import type { Config } from '../../types/index.js';

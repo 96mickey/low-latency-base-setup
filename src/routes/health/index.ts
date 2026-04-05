@@ -1,3 +1,7 @@
+/**
+ * GET /health: response JSON schema only; logic in `controllers/health.controller`.
+ */
+
 import type { FastifyInstance } from 'fastify';
 
 import { healthHandler, type HealthDeps } from '../../controllers/health.controller.js';

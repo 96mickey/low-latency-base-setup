@@ -1,3 +1,7 @@
+/**
+ * Aggregates route registration — add new route modules here and extend `RouteDeps` as needed.
+ */
+
 import type { FastifyInstance } from 'fastify';
 
 import type { HealthDeps } from '../controllers/health.controller.js';

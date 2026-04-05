@@ -1,3 +1,9 @@
+/**
+ * Composes the HTTP application: Fastify instance, cross-cutting middleware, routes, and shutdown.
+ * Plugin order matters (security → identity → rate limits → metrics hooks → errors → routes).
+ * Hybrid Redis mode starts background sync of per-IP rate-limit deltas to Redis.
+ */
+
 import closeWithGrace from 'close-with-grace';
 import type { FastifyInstance } from 'fastify';
 import pino from 'pino';
@@ -49,6 +55,7 @@ export async function buildApp(config: Config): Promise<AppBundle> {
     syncTask.start(redis, () => tokenBucket.drainDeltas(), config);
   }
 
+  // Registers SIGTERM/SIGINT handling: stop timers and close Redis, Postgres, then Fastify.
   closeWithGrace(
     { delay: config.SHUTDOWN_GRACE_MS },
     async ({ err, signal: _signal }) => {
@@ -66,6 +73,7 @@ export async function buildApp(config: Config): Promise<AppBundle> {
 
   fastify.addHook('onRequest', makeMetricsOnRequest);
 
+  // --- Request pipeline (order preserved) ---
   await fastify.register(securityPlugin, { config });
 
   await fastify.register(correlationIdPlugin);
@@ -81,12 +89,14 @@ export async function buildApp(config: Config): Promise<AppBundle> {
 
   fastify.addHook('onResponse', makeMetricsOnResponse);
 
+  // Latency CB: use Fastify reply.elapsedTime each request (see rateLimit/latencyCircuitBreaker).
   fastify.addHook('onResponse', async (request, reply) => {
     const ms = reply.elapsedTime ?? 0;
     latencyCircuitBreaker.recordLatency(ms);
     latencyCircuitBreaker.onRequestCompleted(ms);
   });
 
+  // Normalises oversized bodies to our standard error shape; everything else → 500 + log.
   fastify.setErrorHandler((err, request, reply) => {
     const e = err as NodeJS.ErrnoException & Error;
     const { code } = e;

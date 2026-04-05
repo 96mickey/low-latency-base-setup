@@ -1,3 +1,7 @@
+/**
+ * Pino options for Fastify: redacts sensitive fields; pretty-print only in development.
+ */
+
 import type { LoggerOptions } from 'pino';
 
 import type { Config } from '../../types/index.js';

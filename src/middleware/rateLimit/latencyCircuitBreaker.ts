@@ -1,3 +1,8 @@
+/**
+ * Instance-wide protection: tracks recent request durations, estimates p99 vs an EMA baseline,
+ * and can OPEN to reject traffic when latency spikes (warmup + HALF_OPEN recovery supported).
+ */
+
 import type { Config, CircuitBreakerState } from '../../types/index.js';
 
 export type LatencyCircuitBreaker = {

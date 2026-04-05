@@ -1,6 +1,7 @@
 /**
- * Process entry — not imported by tests.
- * Loads `.env` from the current working directory when present (see `dotenv`).
+ * Process entry (not imported by tests).
+ * Flow: env → build app → connect infra → listen (API PORT + METRICS_PORT).
+ * `.env` is loaded via dotenv when present (repo root cwd).
  */
 
 import 'dotenv/config';
@@ -17,6 +18,7 @@ async function main() {
   await bundle.postgres.connect();
   await bundle.redis.connect();
 
+  // Separate HTTP server so /metrics is not exposed on the public API port.
   const metricsApp = await createMetricsServer(config, () => {
     const { pool } = bundle.postgres;
     return {
