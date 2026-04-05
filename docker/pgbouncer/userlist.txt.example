@@ -1,0 +1,2 @@
+; Copy to userlist.txt for local PgBouncer experiments (gitignored).
+; Format: "md5<hash>" where hash = md5(password + username) — see PgBouncer docs.

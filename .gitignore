@@ -6,3 +6,4 @@ dist/
 coverage/
 .tmp/
 tests/coverage/
+docker/pgbouncer/userlist.txt
