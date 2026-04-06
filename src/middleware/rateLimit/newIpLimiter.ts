@@ -7,14 +7,17 @@ export type NewIpLimiter = {
 /**
  * Caps how many *new* (never-seen) IPs can appear per rolling second.
  * Returning IPs (already in token bucket LRU) bypass via isReturningIp.
+ *
+ * With `rateLimit` hook order `hasIp → checkAndRecord → consumeToken` (all sync), a given IP
+ * is only "new" once per window: after the first allowed pass, `consumeToken` records it and
+ * later requests see `isReturningIp === true`. A per-window counter is enough; no Set needed.
  */
 export function createNewIpLimiter(config: Config): NewIpLimiter {
   let windowStartSec = Math.floor(Date.now() / 1000);
   let newIpsThisWindow = 0;
-  const seenNew = new Set<string>();
 
   return {
-    checkAndRecord(ip: string, isReturningIp: boolean): boolean {
+    checkAndRecord(_ip: string, isReturningIp: boolean): boolean {
       if (isReturningIp) {
         return true;
       }
@@ -22,15 +25,10 @@ export function createNewIpLimiter(config: Config): NewIpLimiter {
       if (sec !== windowStartSec) {
         windowStartSec = sec;
         newIpsThisWindow = 0;
-        seenNew.clear();
-      }
-      if (seenNew.has(ip)) {
-        return true;
       }
       if (newIpsThisWindow >= config.RL_NEW_IP_RATE_MAX) {
         return false;
       }
-      seenNew.add(ip);
       newIpsThisWindow += 1;
       return true;
     },

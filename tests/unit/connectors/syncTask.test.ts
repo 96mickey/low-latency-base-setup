@@ -24,8 +24,7 @@ function makeClient(execImpl: () => Promise<unknown>): RedisConnector {
     teardown: vi.fn(),
     get: vi.fn(),
     pipeline: () => ({
-      incrby: vi.fn().mockReturnThis(),
-      expire: vi.fn().mockReturnThis(),
+      eval: vi.fn().mockReturnThis(),
       exec: execImpl,
     }),
   };
@@ -65,6 +64,77 @@ describe('createSyncTask', () => {
     task.start(client, () => deltas, config);
     await vi.advanceTimersByTimeAsync(100);
     expect(exec).toHaveBeenCalled();
+    await task.stop();
+  });
+
+  it('pipelines one EVAL per IP (INCRBY + conditional EXPIRE in Lua)', async () => {
+    const evalFn = vi.fn().mockReturnThis();
+    const exec = vi.fn().mockResolvedValue([]);
+    const client: RedisConnector = {
+      connect: vi.fn(),
+      healthCheck: vi.fn(),
+      teardown: vi.fn(),
+      get: vi.fn(),
+      pipeline: () => ({ eval: evalFn, exec }),
+    };
+    const config = loadConfig({
+      ...base,
+      REDIS_MODE: 'hybrid',
+      REDIS_TOPOLOGY: 'standalone',
+      REDIS_SYNC_INTERVAL_MS: '100',
+    } as NodeJS.ProcessEnv);
+    const task = createSyncTask();
+    task.start(
+      client,
+      () => new Map<string, number>([
+        ['1.2.3.4', 2],
+        ['5.5.5.5', 1],
+      ]),
+      config,
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    expect(evalFn).toHaveBeenCalledTimes(2);
+    expect(evalFn).toHaveBeenCalledWith(
+      expect.stringContaining('INCRBY'),
+      1,
+      'rl:ip:1.2.3.4',
+      '2',
+      '3600',
+    );
+    expect(evalFn).toHaveBeenCalledWith(
+      expect.stringContaining('EXPIRE'),
+      1,
+      'rl:ip:5.5.5.5',
+      '1',
+      '3600',
+    );
+    await task.stop();
+  });
+
+  it('does not start a second tick while the previous exec is still pending', async () => {
+    const config = loadConfig({
+      ...base,
+      REDIS_MODE: 'hybrid',
+      REDIS_TOPOLOGY: 'standalone',
+      REDIS_SYNC_INTERVAL_MS: '10',
+    } as NodeJS.ProcessEnv);
+    let releaseFirst: (v: unknown) => void;
+    const exec = vi.fn()
+      .mockImplementationOnce(
+        () => new Promise<unknown>((r) => { releaseFirst = r; }),
+      )
+      .mockResolvedValue([]);
+    const client = makeClient(exec);
+    const task = createSyncTask();
+    task.start(client, () => new Map([['9.9.9.9', 1]]), config);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(exec).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(exec).toHaveBeenCalledTimes(1);
+    releaseFirst!([]);
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(exec).toHaveBeenCalledTimes(2);
     await task.stop();
   });
 

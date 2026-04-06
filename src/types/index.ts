@@ -25,6 +25,10 @@ export interface Config {
   DB_SSL: boolean;
   DB_POOL_MIN: number;
   DB_POOL_MAX: number;
+  /** Close idle pool clients after this many ms (frees PgBouncer / server slots). */
+  DB_POOL_IDLE_TIMEOUT_MS: number;
+  /** PostgreSQL `statement_timeout` per session (ms); cancels runaway queries. */
+  DB_STATEMENT_TIMEOUT_MS: number;
   DB_CONNECT_MAX_RETRIES: number;
   DB_CONNECT_RETRY_BASE_MS: number;
   REDIS_MODE: RedisMode;

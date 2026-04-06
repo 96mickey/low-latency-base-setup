@@ -38,11 +38,24 @@ describe('createPostgresConnector', () => {
     mockEnd.mockResolvedValue(undefined);
   });
 
-  it('connect acquires and releases a client', async () => {
-    const config = loadConfig(base as NodeJS.ProcessEnv);
+  it('connect warms DB_POOL_MIN clients in parallel', async () => {
+    const config = loadConfig({
+      ...base,
+      DB_POOL_MIN: '3',
+    } as NodeJS.ProcessEnv);
     const pg = createPostgresConnector(config);
     await pg.connect();
-    expect(mockConnect).toHaveBeenCalled();
+    expect(mockConnect).toHaveBeenCalledTimes(3);
+  });
+
+  it('connect uses one client when DB_POOL_MIN is 0', async () => {
+    const config = loadConfig({
+      ...base,
+      DB_POOL_MIN: '0',
+    } as NodeJS.ProcessEnv);
+    const pg = createPostgresConnector(config);
+    await pg.connect();
+    expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
   it('healthCheck returns connected when query succeeds', async () => {

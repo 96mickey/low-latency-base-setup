@@ -20,12 +20,17 @@ describe('createPool', () => {
   it('builds pg Pool from config', async () => {
     const config = loadConfig(base as NodeJS.ProcessEnv);
     const pool = createPool(config);
-    expect((pool as unknown as { options: { host: string; ssl: unknown } }).options.host).toBe(
-      'db.example',
-    );
-    expect((pool as unknown as { options: { ssl: unknown } }).options.ssl).toEqual({
-      rejectUnauthorized: true,
-    });
+    type PoolOpts = {
+      host: string;
+      ssl: unknown;
+      idleTimeoutMillis: number;
+      statement_timeout: number;
+    };
+    const opts = (pool as unknown as { options: PoolOpts }).options;
+    expect(opts.host).toBe('db.example');
+    expect(opts.ssl).toEqual({ rejectUnauthorized: true });
+    expect(opts.idleTimeoutMillis).toBe(30_000);
+    expect(opts.statement_timeout).toBe(60_000);
     await pool.end();
   });
 });

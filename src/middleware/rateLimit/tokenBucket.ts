@@ -37,14 +37,14 @@ export function createTokenBucket(config: Config): TokenBucket {
 
     consumeToken(ip: string) {
       const now = Date.now();
-      let entry = lru.get(ip);
-      if (entry === undefined) {
-        entry = {
-          tokens: config.RL_IP_MAX_TOKENS,
-          lastRefillMs: now,
-          localDelta: 0,
-        };
-      }
+      // Returning IP: `get()` promotes; mutate `entry` only — avoid redundant `set()`.
+      const prev = lru.get(ip);
+      const isNew = prev === undefined;
+      const entry = prev ?? {
+        tokens: config.RL_IP_MAX_TOKENS,
+        lastRefillMs: now,
+        localDelta: 0,
+      };
       const elapsedSec = (now - entry.lastRefillMs) / 1000;
       const refill = elapsedSec * config.RL_IP_REFILL_RATE;
       entry.tokens = Math.min(config.RL_IP_MAX_TOKENS, entry.tokens + refill);
@@ -52,13 +52,17 @@ export function createTokenBucket(config: Config): TokenBucket {
 
       if (entry.tokens < 1) {
         const retryAfterSecs = Math.max(1, Math.ceil(1 / config.RL_IP_REFILL_RATE));
-        lru.set(ip, entry);
+        if (isNew) {
+          lru.set(ip, entry);
+        }
         return { allowed: false, retryAfterSecs };
       }
 
       entry.tokens -= 1;
       entry.localDelta += 1;
-      lru.set(ip, entry);
+      if (isNew) {
+        lru.set(ip, entry);
+      }
       return { allowed: true, retryAfterSecs: 0 };
     },
 

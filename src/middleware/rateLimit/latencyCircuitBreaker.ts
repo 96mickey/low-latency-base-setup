@@ -1,9 +1,21 @@
 /**
- * Instance-wide protection: tracks recent request durations, estimates p99 vs an EMA baseline,
- * and can OPEN to reject traffic when latency spikes (warmup + HALF_OPEN recovery supported).
+ * Instance-wide protection: rejects traffic when recent latency p99 spikes vs an EMA baseline.
+ * Uses HDR Histogram for O(1) `recordValue` / `getValueAtPercentile` — no per-tick sort/alloc.
+ *
+ * Semantics: p99 is computed over latencies recorded **since the previous tick** (each tick
+ * reads then `reset()`). `LATENCY_CB_CHECK_INTERVAL_MS` defines that window;
+ * `LATENCY_CB_WINDOW_SIZE` is kept in config for compatibility but is **not** used here.
  */
 
+import { build } from 'hdr-histogram-js';
+
 import type { Config, CircuitBreakerState } from '../../types/index.js';
+
+/** Need enough samples in the interval before OPEN is allowed (matches prior ring behaviour). */
+const MIN_SAMPLES_BEFORE_OPEN = 11;
+
+/** Upper bound for request duration in ms (HDR requires a finite trackable max). */
+const HISTOGRAM_MAX_LATENCY_MS = 3_600_000;
 
 export type LatencyCircuitBreaker = {
   getState: () => CircuitBreakerState;
@@ -14,16 +26,14 @@ export type LatencyCircuitBreaker = {
   onRequestCompleted: (ms: number) => void;
 };
 
-function percentile99(sorted: number[]): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.99) - 1);
-  return sorted[idx] ?? 0;
-}
-
 export function createLatencyCircuitBreaker(config: Config): LatencyCircuitBreaker {
-  const buf = new Float64Array(config.LATENCY_CB_WINDOW_SIZE);
-  let idx = 0;
-  let count = 0;
+  const histogram = build({
+    highestTrackableValue: HISTOGRAM_MAX_LATENCY_MS,
+    lowestDiscernibleValue: 1,
+    numberOfSignificantValueDigits: 2,
+    useWebAssembly: false,
+  });
+
   let state: CircuitBreakerState = 'CLOSED';
   let openedAt = 0;
   let emaP99 = 0;
@@ -31,12 +41,16 @@ export function createLatencyCircuitBreaker(config: Config): LatencyCircuitBreak
   let timer: ReturnType<typeof setInterval> | null = null;
   let halfOpenProbesOk = 0;
 
-  function sampleP99(): number {
-    const n = Math.min(count, config.LATENCY_CB_WINDOW_SIZE);
-    if (n === 0) return 0;
-    const slice = Array.from(buf.slice(0, n));
-    slice.sort((a, b) => a - b);
-    return percentile99(slice);
+  function recordMs(ms: number): void {
+    const clamped = Number.isFinite(ms)
+      ? Math.min(Math.max(ms, 0), HISTOGRAM_MAX_LATENCY_MS)
+      : 0;
+    const v = Math.round(clamped);
+    if (v < 1) {
+      histogram.recordValue(1);
+    } else {
+      histogram.recordValue(v);
+    }
   }
 
   function tick() {
@@ -57,14 +71,21 @@ export function createLatencyCircuitBreaker(config: Config): LatencyCircuitBreak
       return;
     }
 
-    const p99 = sampleP99();
+    const n = histogram.totalCount;
+    if (n === 0) {
+      return;
+    }
+
+    const p99 = histogram.getValueAtPercentile(99);
+    histogram.reset();
+
     if (emaP99 === 0) {
       emaP99 = p99;
     } else {
       emaP99 = 0.2 * p99 + 0.8 * emaP99;
     }
 
-    if (p99 > emaP99 + config.LATENCY_CB_DELTA_MS && count > 10) {
+    if (p99 > emaP99 + config.LATENCY_CB_DELTA_MS && n >= MIN_SAMPLES_BEFORE_OPEN) {
       state = 'OPEN';
       openedAt = now;
     }
@@ -75,9 +96,7 @@ export function createLatencyCircuitBreaker(config: Config): LatencyCircuitBreak
 
     recordLatency(ms: number) {
       if (state === 'OPEN') return;
-      buf[idx % config.LATENCY_CB_WINDOW_SIZE] = ms;
-      idx += 1;
-      count = Math.min(count + 1, config.LATENCY_CB_WINDOW_SIZE);
+      recordMs(ms);
     },
 
     allowRequest() {

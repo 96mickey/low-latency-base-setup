@@ -1,6 +1,7 @@
 /**
  * Postgres access: connection pool + Drizzle handle for future queries/migrations.
- * `connect()` warms the pool with retries; `healthCheck` is used by GET /health.
+ * `connect()` warms `max(1, DB_POOL_MIN)` clients in parallel (retries on failure) so deploy
+ * bursts do not open the rest lazily at once; `healthCheck` is used by GET /health.
  */
 
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -26,10 +27,15 @@ export function createPostgresConnector(config: Config): PostgresConnector {
 
   return {
     async connect() {
+      const warmCount = Math.max(1, config.DB_POOL_MIN);
       await withRetry(
         async () => {
-          const client = await pool.connect();
-          client.release();
+          await Promise.all(
+            Array.from({ length: warmCount }, async () => {
+              const client = await pool.connect();
+              client.release();
+            }),
+          );
         },
         {
           maxRetries: config.DB_CONNECT_MAX_RETRIES,
@@ -39,13 +45,25 @@ export function createPostgresConnector(config: Config): PostgresConnector {
     },
 
     async healthCheck() {
+      const healthTimeoutMs = 2000;
+      let tid: ReturnType<typeof setTimeout> | undefined;
       try {
         const timeout = new Promise<never>((_, rej) => {
-          setTimeout(() => rej(new Error('timeout')), 2000);
+          tid = setTimeout(() => rej(new Error('timeout')), healthTimeoutMs);
         });
-        await Promise.race([pool.query('SELECT 1'), timeout]);
+        await Promise.race([
+          pool.query('SELECT 1').finally(() => {
+            if (tid !== undefined) {
+              clearTimeout(tid);
+            }
+          }),
+          timeout,
+        ]);
         return 'connected';
       } catch {
+        if (tid !== undefined) {
+          clearTimeout(tid);
+        }
         return 'disconnected';
       }
     },

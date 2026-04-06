@@ -57,25 +57,17 @@ export const redisSyncErrorsTotal = new Counter({
   registers: [registry],
 });
 
-const startTimeSym = Symbol('metricsStartMs');
-
-export function makeMetricsOnRequest(
-  request: FastifyRequest,
-  _reply: FastifyReply,
-  done: () => void,
-): void {
-  (request as FastifyRequest & { [startTimeSym]?: number })[startTimeSym] = performance.now();
-  done();
-}
-
+/**
+ * HTTP duration uses `reply.elapsedTime` (Fastify) instead of a request Symbol / WeakMap so
+ * we do not add hidden properties to high-churn `FastifyRequest` objects. Matches the latency
+ * circuit breaker hook in `app.ts` (same clock as access-log `responseTime`).
+ */
 export function makeMetricsOnResponse(
   request: FastifyRequest,
   reply: FastifyReply,
   done: () => void,
 ): void {
-  const reqWithStart = request as FastifyRequest & { [startTimeSym]?: number };
-  const start = reqWithStart[startTimeSym];
-  const duration = start !== undefined ? performance.now() - start : 0;
+  const duration = reply.elapsedTime ?? 0;
   const route = request.routeOptions?.url ?? request.url;
   const { method } = request;
   const { statusCode } = reply;

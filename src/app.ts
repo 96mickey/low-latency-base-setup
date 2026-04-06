@@ -1,6 +1,6 @@
 /**
  * Composes the HTTP application: Fastify instance, cross-cutting middleware, routes, and shutdown.
- * Plugin order matters (security → identity → rate limits → metrics hooks → errors → routes).
+ * Plugin order: security, identity, rate limits, onResponse (metrics + latency CB), errors, routes.
  * Hybrid Redis mode starts background sync of per-IP rate-limit deltas to Redis.
  */
 
@@ -18,10 +18,7 @@ import { rateLimitPlugin } from './middleware/rateLimit/index.js';
 import { createTokenBucket } from './middleware/rateLimit/tokenBucket.js';
 import { securityPlugin } from './middleware/security/index.js';
 import { tracingSlotPlugin } from './middleware/tracingSlot/index.js';
-import {
-  makeMetricsOnRequest,
-  makeMetricsOnResponse,
-} from './observability/metrics/definitions.js';
+import { makeMetricsOnResponse } from './observability/metrics/definitions.js';
 import { buildLogger } from './observability/logger/index.js';
 import { registerRoutes } from './routes/index.js';
 import { createFastifyInstance } from './server/factory.js';
@@ -71,8 +68,6 @@ export async function buildApp(config: Config): Promise<AppBundle> {
     },
   );
 
-  fastify.addHook('onRequest', makeMetricsOnRequest);
-
   // --- Request pipeline (order preserved) ---
   await fastify.register(securityPlugin, { config });
 
@@ -87,9 +82,9 @@ export async function buildApp(config: Config): Promise<AppBundle> {
     latencyCircuitBreaker,
   });
 
+  // Histogram + latency CB use `reply.elapsedTime` (same clock as access-log `responseTime`).
   fastify.addHook('onResponse', makeMetricsOnResponse);
 
-  // Latency CB: use Fastify reply.elapsedTime each request (see rateLimit/latencyCircuitBreaker).
   fastify.addHook('onResponse', async (request, reply) => {
     const ms = reply.elapsedTime ?? 0;
     latencyCircuitBreaker.recordLatency(ms);

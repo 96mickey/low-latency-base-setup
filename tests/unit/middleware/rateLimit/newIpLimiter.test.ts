@@ -46,9 +46,11 @@ describe('createNewIpLimiter', () => {
     expect(lim.checkAndRecord('3.3.3.3', false)).toBe(true);
   });
 
-  it('same new IP twice in window counts once', () => {
+  it('same IP only consumes cap when first seen as new (matches hasIp → consumeToken order)', () => {
     const lim = createNewIpLimiter(loadConfig(base as NodeJS.ProcessEnv));
     expect(lim.checkAndRecord('4.4.4.4', false)).toBe(true);
-    expect(lim.checkAndRecord('4.4.4.4', false)).toBe(true);
+    expect(lim.checkAndRecord('4.4.4.4', true)).toBe(true);
+    expect(lim.checkAndRecord('5.5.5.5', false)).toBe(true);
+    expect(lim.checkAndRecord('6.6.6.6', false)).toBe(false);
   });
 });
