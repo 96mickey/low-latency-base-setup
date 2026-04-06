@@ -28,7 +28,7 @@ All implementation decisions resolved during Phase 2 technical planning.
 
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
-| 1a | Latency-based circuit breaker | Opens when p99 latency rises > `LATENCY_CB_DELTA_MS` (default 5ms) above baseline. Self-calibrating EMA baseline. State: CLOSED → OPEN → HALF-OPEN → CLOSED. |
+| 1a | Latency-based circuit breaker | HDR Histogram p99 per `LATENCY_CB_CHECK_INTERVAL_MS` vs EMA baseline; opens when spike > `LATENCY_CB_DELTA_MS` (default 5ms). State: CLOSED → OPEN → HALF-OPEN → CLOSED. See D-14. |
 | 1b | New-IP rate limiter | Caps rate of new unique IPs/sec (`RL_NEW_IP_RATE_MAX`). Returning IPs bypass this layer entirely. Targets rotating-IP DDoS without penalising legitimate users. |
 | 2 | Per-IP token bucket (LRU Map) | `RL_IP_MAX_TOKENS=100` (burst), `RL_IP_REFILL_RATE=10` (tokens/sec). LRU cap: `RL_MAX_IPS=500000` (~75 MB). |
 
@@ -104,15 +104,21 @@ Rate limiting always uses `local` or `hybrid` — never `redis-primary`.
 ---
 
 ## D-14 — Latency Circuit Breaker Parameters
+**Implementation:** p99 is computed with **`hdr-histogram-js`** (`recordValue` / `getValueAtPercentile(99)`), not a sorted ring buffer. After each CLOSED-state tick the histogram is **reset**; therefore p99 is over samples recorded **since the previous tick** (time bucket ≈ `LATENCY_CB_CHECK_INTERVAL_MS`), not the last `LATENCY_CB_WINDOW_SIZE` requests. `LATENCY_CB_WINDOW_SIZE` remains in config for compatibility but is **not** read by the circuit breaker module.
+
+**HTTP duration source:** Metrics (`http_request_duration_ms`) and the circuit breaker both use Fastify **`reply.elapsedTime`** in `onResponse` (same clock as access-log `responseTime`).
+
 **Env vars:**
 
 | Var | Default | Purpose |
 |-----|---------|---------|
 | `LATENCY_CB_DELTA_MS` | `5` | ms increase over baseline that opens the circuit |
-| `LATENCY_CB_WINDOW_SIZE` | `10000` | Ring buffer size (recent requests tracked) |
-| `LATENCY_CB_CHECK_INTERVAL_MS` | `100` | Background p99 recompute interval |
+| `LATENCY_CB_WINDOW_SIZE` | `10000` | Legacy env; not used by HDR implementation (kept for config stability) |
+| `LATENCY_CB_CHECK_INTERVAL_MS` | `100` | Wall-clock interval between tick runs; defines p99 aggregation window |
 | `LATENCY_CB_RECOVERY_MS` | `5000` | Time in OPEN before HALF-OPEN probe |
 | `LATENCY_CB_WARMUP_MS` | `30000` | Warmup period — no circuit breaks, baseline seeds |
+
+**Operator note:** Grafana/alerts that assumed “last N requests” p99 must be reinterpreted as **per-check-interval** p99.
 
 ---
 
@@ -153,3 +159,10 @@ Redis vars (`REDIS_HOST`, `REDIS_PORT`, etc.) are optional when `REDIS_MODE=loca
 **Reason:** Each chunk is independently reviewable and testable. Chunks 01–02 establish the foundation that all later chunks import from. Observability (Chunk 04) is placed before rate limiting (Chunk 05) so that the `rateLimitRejectedTotal` metric is defined before the code that increments it. Security and correlation ID (Chunk 03) are placed before rate limiting so that 429 responses carry security headers and correlation IDs. The health route (Chunk 06) depends on both connectors (Chunk 02) and observability (Chunk 04 for pool gauges) being in place. Integration wiring (Chunk 07) is last because it is the only chunk that requires every other module to exist.
 
 **No design changes introduced.** This decision records the chunking rationale only. No DAR approval required — this is a planning organisation choice within the approved technical design.
+
+---
+
+## D-19 — Custom LRU Map vs `lru-cache`; percentile stack
+**LRU (`LruMap` in `src/helpers/lruMap.ts`):** Keep in-repo doubly linked list + `Map` for the per-IP token bucket. It enforces **max entry count** (`RL_MAX_IPS`) with LRU eviction at capacity; time-based eviction of stale IPs is handled separately in the token bucket sweep. A third-party cache (e.g. `lru-cache`) could reduce allocations/GC at extreme churn but adds dependency and API surface; **no switch** unless benchmarks show measurable pain. External reviews claiming “no size-based eviction” do **not** apply: cardinality cap is implemented.
+
+**Percentiles:** Latency circuit breaker uses **HDR Histogram** (`hdr-histogram-js`); there is no custom sort/ring-buffer p99 on the hot path. See D-14 for interval semantics and operator/dashboard alignment.
